@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-# table-viewer
-Table Viewer with Filtering, Searching, and PDF Export
-=======
 # Table Viewer with Filtering, Searching, and PDF Export
 
 ## Overview
@@ -83,6 +79,3 @@ http://127.0.0.1:5000/
 - PDF export uses jsPDF library included via CDN.
 - Make sure your data files have consistent formats for best results.
 - Unable to read CPORT format.
-
-
->>>>>>> bc530b5 (first commit)
