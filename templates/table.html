@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Table: {{ filename }}</title>
+    <style>
+        .data { border-collapse: collapse; width: 100%; }
+        .data th, .data td { border: 1px solid #ddd; padding: 8px; cursor: pointer; }
+        .data th { background-color: #f2f2f2; }
+        .hidden { display: none; }
+        #filter-col2 { margin-left: 10px; }
+        #search-box { margin-left: 10px; }
+        #controls { margin-bottom: 10px; }
+        #back-link { margin-top: 15px; display: inline-block; }
+        button {
+            margin-left: 10px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h2>Table: {{ filename }}</h2>
+
+    <div id="controls">
+        <label for="filter-col2" id="filter-label">Filter by second column:</label>
+        <select id="filter-col2" data-column="1">
+            <option value="">All</option>
+        </select>
+
+        <label for="search-box">Search all columns:</label>
+        <input type="text" id="search-box" placeholder="Search..." />
+
+        <button id="toggle-btn" onclick="toggleTable()" style="display:none;">Show All Rows</button>
+        <button id="pdf-btn" onclick="exportPDF()">Export to PDF</button>
+    </div>
+
+    <div id="short-table">{{ short_table|safe }}</div>
+    <div id="full-table" class="hidden">{{ full_table|safe }}</div>
+
+    <a href="{{ url_for('index') }}" id="back-link">← Back to tables list</a>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const shortTable = document.getElementById('short-table');
+            const fullTable = document.getElementById('full-table');
+            const toggleBtn = document.getElementById('toggle-btn');
+            const filterSelect = document.getElementById('filter-col2');
+            const searchBox = document.getElementById('search-box');
+            const filterLabel = document.getElementById('filter-label');
+
+            function getTables() {
+                return [shortTable.querySelector('table'), fullTable.querySelector('table')];
+            }
+
+            function getColumnName(index) {
+                const tables = getTables();
+                if (tables[0]) {
+                    const th = tables[0].querySelectorAll('th')[index];
+                    if (th) return th.innerText || th.textContent;
+                }
+                return 'column ' + (index + 1);
+            }
+
+            filterLabel.innerText = "Filter by " + getColumnName(1) + ":";
+
+            function populateFilterOptions() {
+                const table = fullTable.querySelector('table');
+                if (!table) return;
+                const values = new Set();
+                table.querySelectorAll('tbody tr').forEach(row => {
+                    const cell = row.cells[1];
+                    if(cell) values.add(cell.textContent.trim());
+                });
+                while (filterSelect.options.length > 1) {
+                    filterSelect.remove(1);
+                }
+                Array.from(values).sort().forEach(val => {
+                    const opt = document.createElement('option');
+                    opt.value = val;
+                    opt.textContent = val;
+                    filterSelect.appendChild(opt);
+                });
+            }
+
+            function applyFilters() {
+                const filterVal = filterSelect.value.toLowerCase();
+                const searchVal = searchBox.value.toLowerCase();
+                const tables = getTables();
+
+                tables.forEach(table => {
+                    if (!table) return;
+                    table.querySelectorAll('tbody tr').forEach(row => {
+                        const cells = row.cells;
+                        let matchesFilter = true;
+                        if (filterVal) {
+                            const cellVal = cells[1] ? cells[1].textContent.toLowerCase() : '';
+                            matchesFilter = (cellVal === filterVal);
+                        }
+                        let matchesSearch = true;
+                        if (searchVal) {
+                            matchesSearch = Array.from(cells).some(cell =>
+                                cell.textContent.toLowerCase().includes(searchVal)
+                            );
+                        }
+                        row.style.display = (matchesFilter && matchesSearch) ? '' : 'none';
+                    });
+                });
+            }
+
+            function getVisibleRowsCount() {
+                const rows = shortTable.querySelectorAll('tbody tr');
+                let count = 0;
+                rows.forEach(row => {
+                    if (row.style.display !== 'none') count++;
+                });
+                return count;
+            }
+
+            function updateToggleButtonVisibility() {
+                const visibleRows = getVisibleRowsCount();
+                if (filterSelect.value === "" && searchBox.value === "" && visibleRows > 50) {
+                    toggleBtn.style.display = 'inline-block';
+                } else {
+                    toggleBtn.style.display = 'none';
+                    shortTable.style.display = 'block';
+                    fullTable.classList.add('hidden');
+                    toggleBtn.textContent = 'Show All Rows';
+                }
+            }
+
+            function toggleTable() {
+                if (fullTable.classList.contains('hidden')) {
+                    fullTable.classList.remove('hidden');
+                    shortTable.style.display = 'none';
+                    toggleBtn.textContent = 'Show Less Rows';
+                } else {
+                    fullTable.classList.add('hidden');
+                    shortTable.style.display = 'block';
+                    toggleBtn.textContent = 'Show All Rows';
+                }
+            }
+
+            function sortTable(table, colIndex, ascending) {
+                const tbody = table.tBodies[0];
+                const rows = Array.from(tbody.rows);
+                rows.sort((a, b) => {
+                    const aText = a.cells[colIndex].textContent.trim().toLowerCase();
+                    const bText = b.cells[colIndex].textContent.trim().toLowerCase();
+                    if (aText < bText) return ascending ? -1 : 1;
+                    if (aText > bText) return ascending ? 1 : -1;
+                    return 0;
+                });
+                rows.forEach(row => tbody.appendChild(row));
+            }
+
+            function addSortHandlers(table) {
+                let sortDirections = [];
+                const headers = table.querySelectorAll('th');
+                headers.forEach((th, i) => {
+                    sortDirections[i] = true;
+                    th.style.cursor = 'pointer';
+                    th.addEventListener('click', () => {
+                        sortTable(table, i, sortDirections[i]);
+                        sortDirections[i] = !sortDirections[i];
+                    });
+                });
+            }
+
+            function exportPDF() {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('l', 'pt', 'a4');
+                const table = fullTable.classList.contains('hidden') ? shortTable.querySelector('table') : fullTable.querySelector('table');
+                if (!table) return alert('No table to export');
+
+                doc.autoTable({
+                    html: table,
+                    startY: 20,
+                    styles: { fontSize: 8 },
+                    margin: { top: 20, bottom: 20 },
+                    didDrawPage: function (data) {
+                        let page = doc.getNumberOfPages();
+                        doc.setFontSize(10);
+                        doc.text("Page " + page, data.settings.margin.left, doc.internal.pageSize.height - 10);
+                    },
+                    pageBreak: 'auto',
+                    theme: 'striped',
+                    headStyles: { fillColor: [41, 128, 185] }
+                });
+
+                doc.save("{{ filename }}.pdf");
+            }
+
+            populateFilterOptions();
+            applyFilters();
+            updateToggleButtonVisibility();
+
+            filterSelect.addEventListener('change', () => {
+                applyFilters();
+                updateToggleButtonVisibility();
+            });
+
+            searchBox.addEventListener('input', () => {
+                applyFilters();
+                updateToggleButtonVisibility();
+            });
+
+            getTables().forEach(table => {
+                if(table) addSortHandlers(table);
+            });
+
+            window.toggleTable = toggleTable;
+            window.exportPDF = exportPDF;
+        });
+    </script>
+</body>
+</html>

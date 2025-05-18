@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Tables</title>
+</head>
+<body>
+    <ul>
+        {% for file in files %}
+            <li><h3><a href="{{ url_for('view_table', filename=file) }}">{{ file }}</a></h3></li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
